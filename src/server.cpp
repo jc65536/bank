@@ -145,7 +145,6 @@ private:
     void close() {
         std::cout << "Client disconnected." << std::endl;
         socket_.close();
-        socket_.release();
         if (current_account) {
             db.commit_updates(current_account);
             current_account.reset();
