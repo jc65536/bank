@@ -28,8 +28,8 @@ int term_menu(std::string prompt, int argc, std::string argv[]) {
 std::string yes_no[] = {"Yes", "No"};
 std::string login_options[] = {"Log in", "Register", "Quit"};
 int login_options_length = 3;
-std::string main_menu_options[] = {"Deposit", "Withdraw", "Transfer", "Change password", "Logout"};
-int main_menu_length = 5;
+std::string main_menu_options[] = {"Deposit", "Withdraw", "Transfer", "Change password", "Inspirational quote", "Logout"};
+int main_menu_length = 6;
 
 enum class state {
     connection_failed,
@@ -41,6 +41,7 @@ enum class state {
     withdraw,
     transfer,
     change_password,
+    quote,
     exit
 };
 
@@ -51,7 +52,7 @@ int main() {
         tcp::resolver resolver(io_context);
 
         // 127.0.0.1
-        std::string host = "206.189.165.91", port = "4567";
+        std::string host = "127.0.0.1", port = "4567";
         std::ifstream hostfile("host.ini");
         if (!hostfile.fail()) {
             hostfile >> host;
@@ -173,6 +174,10 @@ int main() {
             }
             case state::main_menu: {
                 std::cout << "Hello " << user_account.account_name << "." << std::endl;
+                new_request(request_type::get_id, "").send(socket);
+                asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
+                asio::read(socket, asio::buffer(response.body, response.header.body_size));
+                std::cout << "(id " << atoi(response.body) << ")" << std::endl;
                 std::cout << "Your balance is currently $" << (user_account.balance / 100) << ".";
                 if (user_account.balance % 100 < 10) {
                     std::cout << "0";
@@ -192,6 +197,9 @@ int main() {
                     current_state = state::change_password;
                     break;
                 case 5:
+                    current_state = state::quote;
+                    break;
+                case 6:
                     new_request(request_type::logout, "").send(socket);
                     user_account = account();
                     current_state = state::entrance;
@@ -297,6 +305,20 @@ int main() {
                 } else {
                     std::cout << "Old password incorrect." << std::endl;
                 }
+                current_state = state::main_menu;
+                break;
+            }
+            case state::quote: {
+                int seed;
+                std::string buf;
+                std::cout << "Enter a number: ";
+                //std::cin >> seed;
+                //std::cin.clear();
+                std::getline(std::cin, buf);
+                new_request(request_type::get_quote, buf).send(socket);
+                asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
+                asio::read(socket, asio::buffer(response.body, response.header.body_size));
+                std::cout << response.body << std::endl;
                 current_state = state::main_menu;
                 break;
             }

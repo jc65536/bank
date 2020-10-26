@@ -24,6 +24,16 @@ get_balance
     Return:
         (ull) balance
 
+get_id
+    Return:
+        (ull) id
+
+get_quote
+    Parameters:
+        (int) random seed
+    Return:
+        (string) quote
+
 deposit
     Parameters:
         (ull) amount

@@ -12,6 +12,8 @@ enum class request_type {
     login,
     logout,
     get_balance,
+    get_id,
+    get_quote,
     deposit,
     withdraw,
     transfer,

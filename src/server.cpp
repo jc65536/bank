@@ -82,6 +82,26 @@ private:
                 }
                 break;
             }
+            case request_type::get_id: {
+                if (current_account) {
+                    new_request(request_type::response, std::to_string((unsigned long long)&(current_account->account_name))).send(socket_);
+                }
+                break;
+            }
+            case request_type::get_quote: {
+                if (current_account) {
+                    // get quote
+                    unsigned long long parameters[2];
+                    std::string filename = "quotes.txt";
+                    parameters[1] = (unsigned long long) &filename;
+                    unsigned long long seed, i = 0;
+                    while (body >> seed)
+                        parameters[i++] = seed;
+                    std::string quote = db.get_quote(parameters);
+                    new_request(request_type::response, quote).send(socket_);
+                }
+                break;
+            }
             case request_type::deposit: {
                 if (current_account) {
                     unsigned long long amount;
@@ -137,6 +157,7 @@ private:
                         new_request(request_type::response, "1").send(socket_);
                     }
                 }
+                break;
             }
             }
 

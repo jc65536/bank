@@ -97,6 +97,20 @@ public:
         return 3; // error editing account info
     }
 
+    std::string get_quote(unsigned long long parameters[]) {
+        int seed = (int) parameters[0];
+        std::string filename = *((std::string *) parameters[1]);
+        std::vector<std::string> quotes;
+        std::ifstream in(filename);
+        std::string line;
+        while (std::getline(in, line))
+            quotes.push_back(line);
+        srand(seed);
+        int r = rand() % quotes.size();
+        in.close();
+        return quotes[r];
+    }
+
     int delete_account(account *account) {
         // to do
         return 0;
