@@ -114,8 +114,10 @@ private:
                         if (status == 0) {
                             current_account->balance -= amount;
                             new_request(request_type::response, std::to_string(current_account->balance)).send(socket_);
-                        } else {
-                            new_request(request_type::response, "e" + std::to_string(status)).send(socket_);
+                        } else if (status == 1) {
+                            new_request(request_type::response, "e2").send(socket_);
+                        } else if (status == 2) {
+                            new_request(request_type::response, "e3").send(socket_);
                         }
                     } else {
                         new_request(request_type::response, "e1").send(socket_);

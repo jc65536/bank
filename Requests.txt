@@ -44,8 +44,8 @@ transfer
     Return:
         (ull) own balance on success
         (string) e1 - if not enough balance
-        (string) e2 - if other account is being used
-        (string) e3 - for other errors
+        (string) e2 - could not find account
+        (string) e3 - if other account is being used
 
 change_password
     Parameters:

@@ -255,6 +255,8 @@ int main() {
                         asio::read(socket, asio::buffer(response.body, response.header.body_size));
                         std::string str_response(response.body);
                         if (str_response == "e2") {
+                            std::cout << "That account does not exist." << std::endl;
+                        } else if (str_response == "e3") {
                             std::cout << "The account you are trying to transfer to is currently being used. You can't transfer money to them right now." << std::endl;
                         } else {
                             unsigned long long int_response = strtoull(response.body, nullptr, 10);
