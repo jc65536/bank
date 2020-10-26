@@ -31,7 +31,7 @@ private:
     }
 
     void read_header() {
-        asio::async_read(socket_, asio::buffer(&req.header, sizeof(request_header)), std::bind(read_body, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+        asio::async_read(socket_, asio::buffer(&req.header, sizeof(request_header)), std::bind(&tcp_connection::read_body, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
     }
 
     void read_body(const std::error_code &ec, size_t bytes) {
@@ -39,7 +39,7 @@ private:
             // handle disconnect
             close();
         } else {
-            asio::async_read(socket_, asio::buffer(req.body, req.header.body_size), std::bind(handle_request, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+            asio::async_read(socket_, asio::buffer(req.body, req.header.body_size), std::bind(&tcp_connection::handle_request, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
     }
 
@@ -167,7 +167,7 @@ public:
 private:
     void start_accept() {
         tcp_connection::pointer new_connection = tcp_connection::create(io_context_, db);
-        acceptor_.async_accept(new_connection->socket(), std::bind(tcp_server::handle_accept, this, new_connection, std::placeholders::_1));
+        acceptor_.async_accept(new_connection->socket(), std::bind(&tcp_server::handle_accept, this, new_connection, std::placeholders::_1));
     }
 
     void handle_accept(tcp_connection::pointer new_connection, const std::error_code &error) {
