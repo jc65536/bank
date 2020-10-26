@@ -105,9 +105,9 @@ public:
         std::string line;
         while (std::getline(in, line))
             quotes.push_back(line);
+        in.close();
         srand(seed);
         int r = rand() % quotes.size();
-        in.close();
         return quotes[r];
     }
 

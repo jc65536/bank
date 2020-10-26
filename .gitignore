@@ -1,6 +1,8 @@
 *.exe
 .vscode
 accounts.db
+host.ini
+flag.txt
 compile_test
 compile_server
 compile_client
