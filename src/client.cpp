@@ -51,8 +51,8 @@ int main() {
 
         tcp::resolver resolver(io_context);
 
-        // 127.0.0.1
-        std::string host = "127.0.0.1", port = "4567";
+        // 206.189.165.91
+        std::string host = "206.189.165.91", port = "4567";
         std::ifstream hostfile("host.ini");
         if (!hostfile.fail()) {
             hostfile >> host;
