@@ -1,0 +1,1 @@
+g++ src/client.cpp -o client.exe -I C:/Users/Jason.Steve/c/libs/asio-1.18.0/include -l ws2_32 -l wsock32 -g

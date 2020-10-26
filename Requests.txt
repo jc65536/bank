@@ -1,0 +1,56 @@
+Note: parameters should be tokenized in order
+
+response
+
+register_account
+    Parameters:
+        (string) account name
+        (ull) password hash
+    Return:
+        0 on success
+        1 if account name is invalid
+
+login
+    Parameters:
+        (string) account name
+        (ull) password hash
+    Return:
+        0 on success
+        1 on fail
+
+logout
+
+get_balance
+    Return:
+        (ull) balance
+
+deposit
+    Parameters:
+        (ull) amount
+    Return:
+        (ull) balance
+
+withdraw
+    Parameters:
+        (ull) amount
+    Return:
+        (ull) balance on success
+        (string) e1 - if not enough balance
+
+transfer
+    Parameters:
+        (string) other account name
+        (ull) amount
+    Return:
+        (ull) own balance on success
+        (string) e1 - if not enough balance
+        (string) e2 - if other account is being used
+        (string) e3 - for other errors
+
+change_password
+    Parameters:
+        (ull) old password hash
+        (ull) new password hash
+    Return:
+        0 on success
+        1 on fail
