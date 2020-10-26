@@ -50,7 +50,8 @@ int main() {
 
         tcp::resolver resolver(io_context);
 
-        std::string host = "127.0.0.1", port = "4567";
+        // 127.0.0.1
+        std::string host = "206.189.165.91", port = "4567";
         std::ifstream hostfile("host.ini");
         if (!hostfile.fail()) {
             hostfile >> host;
@@ -76,7 +77,7 @@ int main() {
             switch (current_state) {
             case state::connection_failed: {
                 int reconnect = term_menu("Connection to server failed. Try another host?", 2, yes_no);
-                if (reconnect) {
+                if (reconnect == 1) {
                     std::string host;
                     std::string port;
                     std::string buf;
@@ -302,6 +303,6 @@ int main() {
 
     } catch (std::exception &e) {
         std::cerr << e.what() << std::endl;
-        std::cout << "Connection with server failed. Don't worry, your money has been saved :)" << std::endl;
+        std::cout << "Connection with server failed." << std::endl;
     }
 }
