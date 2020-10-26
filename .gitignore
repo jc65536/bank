@@ -1,0 +1,6 @@
+*.exe
+.vscode
+accounts.db
+compile_test
+compile_server
+compile_client

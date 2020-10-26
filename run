@@ -1,4 +1,0 @@
-while true
-do 
-    ./client.exe $1
-done

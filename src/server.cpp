@@ -160,7 +160,7 @@ private:
 
 class tcp_server {
 public:
-    tcp_server(asio::io_context &io_context) : io_context_(io_context), acceptor_(io_context, tcp::endpoint(tcp::v4(), 4567)) {
+    tcp_server(asio::io_context &io_context, int port) : io_context_(io_context), acceptor_(io_context, tcp::endpoint(tcp::v4(), port)) {
         start_accept();
     }
 
@@ -181,10 +181,14 @@ private:
     database db;
 };
 
-int main() {
+int main(int argc, char **argv) {
     try {
+        int port = 4567;
+        if (argc > 1) {
+            port = atoi(argv[1]); // Careful!
+        }
         asio::io_context io_context;
-        tcp_server server(io_context);
+        tcp_server server(io_context, port);
         io_context.run();
     } catch (std::exception &e) {
         std::cerr << e.what() << std::endl;

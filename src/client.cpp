@@ -1,6 +1,7 @@
 #include "account.h"
 #include "request.h"
 #include <asio.hpp>
+#include <fstream>
 #include <iostream>
 
 using asio::ip::tcp;
@@ -24,12 +25,14 @@ int term_menu(std::string prompt, int argc, std::string argv[]) {
     return n;
 }
 
+std::string yes_no[] = {"Yes", "No"};
 std::string login_options[] = {"Log in", "Register", "Quit"};
 int login_options_length = 3;
 std::string main_menu_options[] = {"Deposit", "Withdraw", "Transfer", "Change password", "Logout"};
 int main_menu_length = 5;
 
 enum class state {
+    connection_failed,
     entrance,
     login,
     registration,
@@ -41,12 +44,20 @@ enum class state {
     exit
 };
 
-int main(int argc, char *argv[]) {
+int main() {
     try {
         asio::io_context io_context;
 
         tcp::resolver resolver(io_context);
-        tcp::resolver::results_type endpoints = resolver.resolve("127.0.0.1", "4567");
+
+        std::string host = "127.0.0.1", port = "4567";
+        std::ifstream hostfile("host.ini");
+        if (!hostfile.fail()) {
+            hostfile >> host;
+            hostfile >> port;
+        }
+        hostfile.close();
+        tcp::resolver::results_type endpoints = resolver.resolve(host, port);
 
         tcp::socket socket(io_context);
 
@@ -58,12 +69,38 @@ int main(int argc, char *argv[]) {
             asio::connect(socket, endpoints);
             current_state = state::entrance;
         } catch (std::system_error &e) {
-            std::cout << "Connection with server failed. Don't worry, your money has been saved :)" << std::endl;
-            current_state = state::exit;
+            current_state = state::connection_failed;
         }
 
         while (current_state != state::exit) {
             switch (current_state) {
+            case state::connection_failed: {
+                int reconnect = term_menu("Connection to server failed. Try another host?", 2, yes_no);
+                if (reconnect) {
+                    std::string host;
+                    std::string port;
+                    std::string buf;
+                    std::cout << "Host: ";
+                    std::cin >> host;
+                    std::getline(std::cin, buf);
+                    std::cout << "Port: ";
+                    std::cin >> port;
+                    std::getline(std::cin, buf);
+                    endpoints = resolver.resolve(host, port);
+                    try {
+                        asio::connect(socket, endpoints);
+                        std::ofstream hostwriter("host.ini", std::ofstream::trunc);
+                        hostwriter << host << " " << port;
+                        hostwriter.close();
+                        current_state = state::entrance;
+                    } catch (std::system_error &e) {
+                        current_state = state::connection_failed;
+                    }
+                } else {
+                    current_state = state::exit;
+                }
+                break;
+            }
             case state::entrance:
                 switch (term_menu("Welcome to CTF Bank", login_options_length, login_options)) {
                 case 1:

@@ -9,7 +9,7 @@
 #include <mutex>
 #include <vector>
 
-#define FILE_NAME "accounts.data"
+#define FILE_NAME "accounts.db"
 
 class database {
 public:
@@ -18,9 +18,14 @@ public:
         unsigned long long pw_hash;
         unsigned long long balance;
         std::ifstream in(FILE_NAME);
-        while (in >> account_name) {
-            in >> pw_hash >> balance;
-            accounts.push_back(account::create(account_name, pw_hash, balance));
+        if (in.fail()) {
+            std::ofstream file(FILE_NAME);
+            file.close();
+        } else {
+            while (in >> account_name) {
+                in >> pw_hash >> balance;
+                accounts.push_back(account::create(account_name, pw_hash, balance));
+            }
         }
         in.close();
     }
