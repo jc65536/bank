@@ -31,7 +31,7 @@ private:
     }
 
     void read_header() {
-        asio::async_read(socket_, asio::buffer(&request.header, sizeof(request_header)), std::bind(read_body, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+        asio::async_read(socket_, asio::buffer(&req.header, sizeof(request_header)), std::bind(read_body, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
     }
 
     void read_body(const std::error_code &ec, size_t bytes) {
@@ -39,7 +39,7 @@ private:
             // handle disconnect
             close();
         } else {
-            asio::async_read(socket_, asio::buffer(request.body, request.header.body_size), std::bind(handle_request, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+            asio::async_read(socket_, asio::buffer(req.body, req.header.body_size), std::bind(handle_request, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
     }
 
@@ -49,55 +49,55 @@ private:
             close();
         } else {
             // handle request
-            std::cout << "Received: " << request.body << std::endl;
+            std::cout << "Received: " << req.body << std::endl;
             std::stringstream body;
-            body << request.body;
-            switch (request.header.type) {
+            body << req.body;
+            switch (req.header.type) {
             case request_type::register_account: {
                 std::string account_name;
                 unsigned long long pw_hash;
                 body >> account_name >> pw_hash;
-                account = db.register_account(account_name, pw_hash);
-                new_request(request_type::response, account ? "0" : "1").send(socket_);
+                current_account = db.register_account(account_name, pw_hash);
+                new_request(request_type::response, current_account ? "0" : "1").send(socket_);
                 break;
             }
             case request_type::login: {
                 std::string account_name;
                 unsigned long long pw_hash;
                 body >> account_name >> pw_hash;
-                account = db.get_account(account_name, pw_hash);
-                new_request(request_type::response, account ? "0" : "1").send(socket_);
+                current_account = db.get_account(account_name, pw_hash);
+                new_request(request_type::response, current_account ? "0" : "1").send(socket_);
                 break;
             }
             case request_type::logout: {
-                if (account) {
-                    db.commit_updates(account);
-                    account.reset();
+                if (current_account) {
+                    db.commit_updates(current_account);
+                    current_account.reset();
                 }
                 break;
             }
             case request_type::get_balance: {
-                if (account) {
-                    new_request(request_type::response, std::to_string(account->balance)).send(socket_);
+                if (current_account) {
+                    new_request(request_type::response, std::to_string(current_account->balance)).send(socket_);
                 }
                 break;
             }
             case request_type::deposit: {
-                if (account) {
+                if (current_account) {
                     unsigned long long amount;
                     body >> amount;
-                    account->balance += amount;
-                    new_request(request_type::response, std::to_string(account->balance)).send(socket_);
+                    current_account->balance += amount;
+                    new_request(request_type::response, std::to_string(current_account->balance)).send(socket_);
                 }
                 break;
             }
             case request_type::withdraw: {
-                if (account) {
+                if (current_account) {
                     unsigned long long amount;
                     body >> amount;
-                    if (account->balance >= amount) {
-                        account->balance -= amount;
-                        new_request(request_type::response, std::to_string(account->balance)).send(socket_);
+                    if (current_account->balance >= amount) {
+                        current_account->balance -= amount;
+                        new_request(request_type::response, std::to_string(current_account->balance)).send(socket_);
                     } else {
                         new_request(request_type::response, "e1").send(socket_);
                     }
@@ -105,15 +105,15 @@ private:
                 break;
             }
             case request_type::transfer: {
-                if (account) {
+                if (current_account) {
                     std::string account_name;
                     unsigned long long amount;
                     body >> account_name >> amount;
-                    if (account->balance >= amount) {
+                    if (current_account->balance >= amount) {
                         int status = db.transfer(account_name, amount);
                         if (status == 0) {
-                            account->balance -= amount;
-                            new_request(request_type::response, std::to_string(account->balance)).send(socket_);
+                            current_account->balance -= amount;
+                            new_request(request_type::response, std::to_string(current_account->balance)).send(socket_);
                         } else {
                             new_request(request_type::response, "e" + std::to_string(status)).send(socket_);
                         }
@@ -124,12 +124,12 @@ private:
                 break;
             }
             case request_type::change_password: {
-                if (account) {
+                if (current_account) {
                     unsigned long long old_pw;
                     unsigned long long new_pw;
                     body >> old_pw >> new_pw;
-                    if (old_pw == account->pw_hash) {
-                        account->pw_hash = new_pw;
+                    if (old_pw == current_account->pw_hash) {
+                        current_account->pw_hash = new_pw;
                         new_request(request_type::response, "0").send(socket_);
                     } else {
                         new_request(request_type::response, "1").send(socket_);
@@ -146,16 +146,16 @@ private:
         std::cout << "Client disconnected." << std::endl;
         socket_.close();
         socket_.release();
-        if (account) {
-            db.commit_updates(account);
-            account.reset();
+        if (current_account) {
+            db.commit_updates(current_account);
+            current_account.reset();
         }
     }
 
     tcp::socket socket_;
     database &db;
-    request request;
-    account::pointer account;
+    request req;
+    account::pointer current_account;
 };
 
 class tcp_server {
