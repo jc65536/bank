@@ -177,7 +177,7 @@ int main() {
                 new_request(request_type::get_id, "").send(socket);
                 asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
                 asio::read(socket, asio::buffer(response.body, response.header.body_size));
-                std::cout << "(id " << atoi(response.body) << ")" << std::endl;
+                std::cout << "(id " << strtoull(response.body, nullptr, 10) << ")" << std::endl;
                 std::cout << "Your balance is currently $" << (user_account.balance / 100) << ".";
                 if (user_account.balance % 100 < 10) {
                     std::cout << "0";
