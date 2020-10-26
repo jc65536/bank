@@ -312,10 +312,10 @@ int main() {
                 int seed;
                 std::string buf;
                 std::cout << "Enter a number: ";
-                //std::cin >> seed;
-                //std::cin.clear();
+                std::cin >> seed;
+                std::cin.clear();
                 std::getline(std::cin, buf);
-                new_request(request_type::get_quote, buf).send(socket);
+                new_request(request_type::get_quote, std::to_string(seed)).send(socket);
                 asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
                 asio::read(socket, asio::buffer(response.body, response.header.body_size));
                 std::cout << response.body << std::endl;
