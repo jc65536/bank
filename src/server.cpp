@@ -2,7 +2,7 @@
 #include "asio.hpp"
 #include "database.h"
 #include "request.h"
-#include <ctime>
+#include "tcp_connection.h"
 #include <functional>
 #include <iostream>
 #include <string>
@@ -10,176 +10,7 @@
 
 using asio::ip::tcp;
 
-class tcp_connection : public std::enable_shared_from_this<tcp_connection> {
-public:
-    typedef std::shared_ptr<tcp_connection> pointer;
-
-    static pointer create(asio::io_context &io_context, database &db) {
-        return pointer(new tcp_connection(io_context, db));
-    }
-
-    tcp::socket &socket() {
-        return socket_;
-    }
-
-    void start() {
-        read_header();
-    }
-
-private:
-    tcp_connection(asio::io_context &io_context, database &db) : socket_(io_context), db(db) {
-    }
-
-    void read_header() {
-        asio::async_read(socket_, asio::buffer(&req.header, sizeof(request_header)), std::bind(&tcp_connection::read_body, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
-    }
-
-    void read_body(const std::error_code &ec, size_t bytes) {
-        if (asio::error::eof == ec || asio::error::connection_reset == ec) {
-            // handle disconnect
-            close();
-        } else {
-            asio::async_read(socket_, asio::buffer(req.body, req.header.body_size), std::bind(&tcp_connection::handle_request, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
-        }
-    }
-
-    void handle_request(const std::error_code &ec, size_t bytes) {
-        if (asio::error::eof == ec || asio::error::connection_reset == ec) {
-            // handle disconnect
-            close();
-        } else {
-            // handle request
-            std::cout << "Received: " << req.body << std::endl;
-            std::stringstream body;
-            body << req.body;
-            switch (req.header.type) {
-            case request_type::register_account: {
-                std::string account_name;
-                unsigned long long pw_hash;
-                body >> account_name >> pw_hash;
-                current_account = db.register_account(account_name, pw_hash);
-                new_request(request_type::response, current_account ? "0" : "1").send(socket_);
-                break;
-            }
-            case request_type::login: {
-                std::string account_name;
-                unsigned long long pw_hash;
-                body >> account_name >> pw_hash;
-                current_account = db.get_account(account_name, pw_hash);
-                new_request(request_type::response, current_account ? "0" : "1").send(socket_);
-                break;
-            }
-            case request_type::logout: {
-                if (current_account) {
-                    db.commit_updates(current_account);
-                    current_account.reset();
-                }
-                break;
-            }
-            case request_type::get_balance: {
-                if (current_account) {
-                    new_request(request_type::response, std::to_string(current_account->balance)).send(socket_);
-                }
-                break;
-            }
-            case request_type::get_id: {
-                if (current_account) {
-                    new_request(request_type::response, std::to_string((unsigned long long)&(current_account->account_name))).send(socket_);
-                }
-                break;
-            }
-            case request_type::get_quote: {
-                if (current_account) {
-                    // get quote
-                    unsigned long long parameters[2];
-                    std::string filename = "quotes.txt";
-                    parameters[1] = (unsigned long long) &filename;
-                    unsigned long long seed, i = 0;
-                    while (body >> seed)
-                        parameters[i++] = seed;
-                    std::string quote = db.get_quote(parameters);
-                    new_request(request_type::response, quote).send(socket_);
-                }
-                break;
-            }
-            case request_type::deposit: {
-                if (current_account) {
-                    unsigned long long amount;
-                    body >> amount;
-                    current_account->balance += amount;
-                    new_request(request_type::response, std::to_string(current_account->balance)).send(socket_);
-                }
-                break;
-            }
-            case request_type::withdraw: {
-                if (current_account) {
-                    unsigned long long amount;
-                    body >> amount;
-                    if (current_account->balance >= amount) {
-                        current_account->balance -= amount;
-                        new_request(request_type::response, std::to_string(current_account->balance)).send(socket_);
-                    } else {
-                        new_request(request_type::response, "e1").send(socket_);
-                    }
-                }
-                break;
-            }
-            case request_type::transfer: {
-                if (current_account) {
-                    std::string account_name;
-                    unsigned long long amount;
-                    body >> account_name >> amount;
-                    if (current_account->balance >= amount) {
-                        int status = db.transfer(account_name, amount);
-                        if (status == 0) {
-                            current_account->balance -= amount;
-                            new_request(request_type::response, std::to_string(current_account->balance)).send(socket_);
-                        } else if (status == 1) {
-                            new_request(request_type::response, "e2").send(socket_);
-                        } else if (status == 2) {
-                            new_request(request_type::response, "e3").send(socket_);
-                        }
-                    } else {
-                        new_request(request_type::response, "e1").send(socket_);
-                    }
-                }
-                break;
-            }
-            case request_type::change_password: {
-                if (current_account) {
-                    unsigned long long old_pw;
-                    unsigned long long new_pw;
-                    body >> old_pw >> new_pw;
-                    if (old_pw == current_account->pw_hash) {
-                        current_account->pw_hash = new_pw;
-                        new_request(request_type::response, "0").send(socket_);
-                    } else {
-                        new_request(request_type::response, "1").send(socket_);
-                    }
-                }
-                break;
-            }
-            }
-
-            read_header();
-        }
-    }
-
-    void close() {
-        std::cout << "Client disconnected." << std::endl;
-        socket_.close();
-        if (current_account) {
-            db.commit_updates(current_account);
-            current_account.reset();
-        }
-    }
-
-    tcp::socket socket_;
-    database &db;
-    request req;
-    account::pointer current_account;
-};
-
+// Like tcp_connection, tcp_server accepts incoming connections asynchronously
 class tcp_server {
 public:
     tcp_server(asio::io_context &io_context, int port) : io_context_(io_context), acceptor_(io_context, tcp::endpoint(tcp::v4(), port)) {
@@ -207,7 +38,7 @@ int main(int argc, char **argv) {
     try {
         int port = 4567;
         if (argc > 1) {
-            port = atoi(argv[1]); // Careful!
+            port = atoi(argv[1]); // Careful! No safeguards here
         }
         asio::io_context io_context;
         tcp_server server(io_context, port);

@@ -1,5 +1,6 @@
 *.exe
 .vscode
+src/test.cpp
 accounts.db
 host.ini
 flag.txt

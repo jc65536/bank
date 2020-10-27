@@ -1,3 +1,7 @@
+/*
+This program is what users will use to interact with the bank server.
+*/
+
 #include "account.h"
 #include "request.h"
 #include <asio.hpp>
@@ -5,31 +9,6 @@
 #include <iostream>
 
 using asio::ip::tcp;
-
-int term_menu(std::string prompt, int argc, std::string argv[]) {
-    std::cout << prompt << std::endl;
-    for (int i = 0; i < argc; i++) {
-        std::cout << "[" << i + 1 << "] " << argv[i] << std::endl;
-    }
-    std::cout << "> ";
-    int n;
-    while (!(std::cin >> n) || n <= 0 || n > argc) {
-        std::cin.clear();
-        std::string str;
-        std::getline(std::cin, str);
-        std::cout << "Please enter a valid option number." << std::endl
-                  << "> ";
-    }
-    std::string str;
-    std::getline(std::cin, str);
-    return n;
-}
-
-std::string yes_no[] = {"Yes", "No"};
-std::string login_options[] = {"Log in", "Register", "Quit"};
-int login_options_length = 3;
-std::string main_menu_options[] = {"Deposit", "Withdraw", "Transfer", "Change password", "Inspirational quote", "Logout"};
-int main_menu_length = 6;
 
 enum class state {
     connection_failed,
@@ -45,27 +24,76 @@ enum class state {
     exit
 };
 
+state current_state;
+account user;
+request response;
+std::stringstream response_scanner; // makes it easier to parse ints and ulls
+
+// Blocks until the data is read
+void read_response(tcp::socket &socket) {
+    asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
+    asio::read(socket, asio::buffer(response.body, response.header.body_size));
+    response_scanner = std::stringstream(response.body);
+}
+
+// Handy util function for multiple choice menus
+int term_menu(std::string prompt, int argc, const std::string argv[]) {
+    std::cout << prompt << std::endl;
+    for (int i = 0; i < argc; i++) {
+        std::cout << "[" << i + 1 << "] " << argv[i] << std::endl;
+    }
+    std::cout << "> ";
+    int n;
+    std::string garbage;
+    while (!(std::cin >> n) || n <= 0 || n > argc) {
+        std::cin.clear();
+        std::getline(std::cin, garbage);
+        std::cout << "Please enter a valid option number." << std::endl
+                  << "> ";
+    }
+    std::string str;
+    std::getline(std::cin, str);
+    return n;
+}
+
+template <typename T>
+T input(std::string prompt) {
+    T input;
+    std::string garbage;
+    std::cout << prompt;
+    std::cin >> input;
+    if (std::cin.fail()) {
+        std::cin.clear();
+        std::getline(std::cin, garbage);
+        throw 1;
+    }
+    std::getline(std::cin, garbage);
+    return input;
+}
+
+const std::string yes_no[] = {"Yes", "No"};
+const std::string login_options[] = {"Log in", "Register", "Quit"};
+const int login_options_length = 3;
+const std::string main_menu_options[] = {"Deposit", "Withdraw", "Transfer", "Change password", "Inspirational quote", "Logout"};
+const int main_menu_length = 6;
+
 int main() {
+    // Asio stuff
+    asio::io_context io_context;
+    tcp::resolver resolver(io_context);
+    tcp::socket socket(io_context);
+    tcp::resolver::results_type endpoints;
+
     try {
-        asio::io_context io_context;
-
-        tcp::resolver resolver(io_context);
-
-        // 206.189.165.91
+        // 206.189.165.91 is my server
         std::string host = "206.189.165.91", port = "4567";
+
+        // use the host defined in in host.ini if the file exists
         std::ifstream hostfile("host.ini");
-        if (!hostfile.fail()) {
-            hostfile >> host;
-            hostfile >> port;
-        }
+        if (!hostfile.fail())
+            hostfile >> host >> port;
         hostfile.close();
-        tcp::resolver::results_type endpoints = resolver.resolve(host, port);
-
-        tcp::socket socket(io_context);
-
-        state current_state;
-        request response;
-        account user_account;
+        endpoints = resolver.resolve(host, port);
 
         try {
             asio::connect(socket, endpoints);
@@ -79,21 +107,14 @@ int main() {
             case state::connection_failed: {
                 int reconnect = term_menu("Connection to server failed. Try another host?", 2, yes_no);
                 if (reconnect == 1) {
-                    std::string host;
-                    std::string port;
-                    std::string buf;
-                    std::cout << "Host: ";
-                    std::cin >> host;
-                    std::getline(std::cin, buf);
-                    std::cout << "Port: ";
-                    std::cin >> port;
-                    std::getline(std::cin, buf);
+                    host = input<std::string>("Host: ");
+                    port = input<std::string>("Port: ");
                     endpoints = resolver.resolve(host, port);
                     try {
                         asio::connect(socket, endpoints);
-                        std::ofstream hostwriter("host.ini", std::ofstream::trunc);
-                        hostwriter << host << " " << port;
-                        hostwriter.close();
+                        std::ofstream host_save("host.ini", std::ofstream::trunc);
+                        host_save << host << " " << port;
+                        host_save.close();
                         current_state = state::entrance;
                     } catch (std::system_error &e) {
                         current_state = state::connection_failed;
@@ -117,26 +138,17 @@ int main() {
                 }
                 break;
             case state::login: {
-                std::string account_name;
-                std::string password;
-                std::string buf;
-                std::cout << "Account name: ";
-                std::cin >> account_name;
-                std::getline(std::cin, buf);
-                std::cout << "Password: ";
-                std::cin >> password;
-                std::getline(std::cin, buf);
+                std::string account_name = input<std::string>("Account name: ");
+                std::string password = input<std::string>("Password: ");
                 unsigned long long pw_hash = std::hash<std::string>()(password);
                 new_request(request_type::login, account_name + " " + std::to_string(pw_hash)).send(socket);
-                asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
-                asio::read(socket, asio::buffer(response.body, response.header.body_size));
+                read_response(socket);
                 if (!atoi(response.body)) {
-                    user_account.account_name = account_name;
-                    user_account.pw_hash = pw_hash;
+                    user.account_name = account_name;
+                    user.pw_hash = pw_hash;
                     new_request(request_type::get_balance, "").send(socket);
-                    asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
-                    asio::read(socket, asio::buffer(response.body, response.header.body_size));
-                    user_account.balance = strtoull(response.body, nullptr, 10);
+                    read_response(socket);
+                    response_scanner >> user.balance;
                     current_state = state::main_menu;
                 } else {
                     std::cout << "Invalid account name or password." << std::endl;
@@ -145,44 +157,33 @@ int main() {
                 break;
             }
             case state::registration: {
-                std::string account_name;
-                std::string password;
-                std::string buf;
-                std::cout << "New account name: ";
-                std::cin >> account_name;
-                std::getline(std::cin, buf);
-                std::cout << "Password: ";
-                std::cin >> password;
-                std::getline(std::cin, buf);
+                std::string account_name = input<std::string>("New account name: ");
+                std::string password = input<std::string>("Password: ");
                 unsigned long long pw_hash = std::hash<std::string>()(password);
                 new_request(request_type::register_account, account_name + " " + std::to_string(pw_hash)).send(socket);
-                asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
-                asio::read(socket, asio::buffer(response.body, response.header.body_size));
+                read_response(socket);
                 if (!atoi(response.body)) {
-                    user_account.account_name = account_name;
-                    user_account.pw_hash = pw_hash;
+                    user.account_name = account_name;
+                    user.pw_hash = pw_hash;
                     new_request(request_type::get_balance, "").send(socket);
-                    asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
-                    asio::read(socket, asio::buffer(response.body, response.header.body_size));
-                    user_account.balance = strtoull(response.body, nullptr, 10);
+                    read_response(socket);
+                    response_scanner >> user.balance;
                     current_state = state::main_menu;
                 } else {
-                    std::cout << "The account name has already been taken." << std::endl;
+                    std::cout << "That account name has already been taken." << std::endl;
                     current_state = state::entrance;
                 }
                 break;
             }
             case state::main_menu: {
-                std::cout << "Hello " << user_account.account_name << "." << std::endl;
+                std::cout << "Hello " << user.account_name << "." << std::endl;
                 new_request(request_type::get_id, "").send(socket);
-                asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
-                asio::read(socket, asio::buffer(response.body, response.header.body_size));
-                std::cout << "(id " << strtoull(response.body, nullptr, 10) << ")" << std::endl;
-                std::cout << "Your balance is currently $" << (user_account.balance / 100) << ".";
-                if (user_account.balance % 100 < 10) {
+                read_response(socket);
+                std::cout << "ID: " << strtoull(response.body, nullptr, 10) << std::endl;
+                std::cout << "Your balance is currently $" << (user.balance / 100) << ".";
+                if (user.balance % 100 < 10)
                     std::cout << "0";
-                }
-                std::cout << user_account.balance % 100 << std::endl;
+                std::cout << user.balance % 100 << std::endl;
                 switch (term_menu("What would you like to do?", main_menu_length, main_menu_options)) {
                 case 1:
                     current_state = state::deposit;
@@ -201,107 +202,82 @@ int main() {
                     break;
                 case 6:
                     new_request(request_type::logout, "").send(socket);
-                    user_account = account();
+                    user = account();
                     current_state = state::entrance;
                     break;
                 }
                 break;
             }
             case state::deposit: {
-                double amount;
-                std::string buf;
-                std::cout << "Deposit amount: $";
-                if (std::cin >> amount && amount > 0) {
-                    unsigned long long int_amount = (unsigned long long)(amount * 100);
+                try {
+                    double amount = input<double>("Deposit amount: $");
+                    if (amount <= 0) throw 1;
+                    unsigned long long int_amount = (unsigned long long) (amount * 100);
                     new_request(request_type::deposit, std::to_string(int_amount)).send(socket);
-                    asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
-                    asio::read(socket, asio::buffer(response.body, response.header.body_size));
-                    user_account.balance = strtoull(response.body, nullptr, 10);
-                } else {
-                    std::cin.clear();
+                    read_response(socket);
+                    response_scanner >> user.balance;
+                } catch (int e) {
                     std::cout << "Please enter a positive number." << std::endl;
                 }
-                std::getline(std::cin, buf);
                 current_state = state::main_menu;
                 break;
             }
             case state::withdraw: {
-                double amount;
-                std::string buf;
-                std::cout << "Withdraw amount: $";
-                if (std::cin >> amount) {
-                    unsigned long long int_amount = (unsigned long long)(amount * 100);
-                    if (0 < int_amount && int_amount <= user_account.balance) {
-                        new_request(request_type::withdraw, std::to_string(int_amount)).send(socket);
-                        asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
-                        asio::read(socket, asio::buffer(response.body, response.header.body_size));
-                        user_account.balance = strtoull(response.body, nullptr, 10);
-                    } else {
-                        std::cout << "You can't withdraw that much!" << std::endl;
-                    }
-                } else {
-                    std::cin.clear();
-                    std::cout << "Please enter a number." << std::endl;
+                try {
+                    double amount = input<double>("Withdraw amount: $");
+                    if (amount < 0) throw 1;
+                    unsigned long long int_amount = (unsigned long long) (amount * 100);
+                    new_request(request_type::withdraw, std::to_string(int_amount)).send(socket);
+                    read_response(socket);
+                    int status;
+                    response_scanner >> status >> user.balance;
+                    if (status != 0)
+                        std::cout << "You can't withdraw that amount." << std::endl;
+                } catch (int e) {
+                    std::cout << "Please enter a positive number." << std::endl;
                 }
-                std::getline(std::cin, buf);
                 current_state = state::main_menu;
                 break;
             }
             case state::transfer: {
-                std::string account_name;
-                double amount;
-                std::string buf;
-                std::cout << "Destination account name: ";
-                std::cin >> account_name;
-                std::getline(std::cin, buf);
-                std::cout << "Transfer amount: $";
-                if (std::cin >> amount) {
-                    unsigned long long int_amount = (unsigned long long)(amount * 100);
-                    if (0 < int_amount && int_amount <= user_account.balance) {
-                        new_request(request_type::transfer, account_name + " " + std::to_string(int_amount)).send(socket);
-                        asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
-                        asio::read(socket, asio::buffer(response.body, response.header.body_size));
-                        std::string str_response(response.body);
-                        if (str_response == "e2") {
-                            std::cout << "That account does not exist." << std::endl;
-                        } else if (str_response == "e3") {
-                            std::cout << "The account you are trying to transfer to is currently being used. You can't transfer money to them right now." << std::endl;
-                        } else {
-                            unsigned long long int_response = strtoull(response.body, nullptr, 10);
-                            user_account.balance = int_response;
-                        }
-                    } else {
-                        std::cout << "You can't transfer that much!" << std::endl;
+                std::string account_name = input<std::string>("Destination account name: ");
+                try {
+                    double amount = input<double>("Transfer amount: $");
+                    if (amount < 0) throw 1;
+                    unsigned long long int_amount = (unsigned long long) (amount * 100);
+                    new_request(request_type::transfer, account_name + " " + std::to_string(int_amount)).send(socket);
+                    read_response(socket);
+                    int status;
+                    response_scanner >> status >> user.balance;
+                    switch (status) {
+                    case 1:
+                        std::cout << "You can't transfer that amount." << std::endl;
+                        break;
+                    case 2:
+                        std::cout << "That account does not exist." << std::endl;
+                        break;
+                    case 3:
+                        std::cout << "The account you are trying to transfer to is currently being used. You can't transfer money to them right now." << std::endl;
+                        break;
                     }
-                } else {
-                    std::cin.clear();
-                    std::cout << "Please enter a number." << std::endl;
+                } catch (int e) {
+                    std::cout << "Please enter a positive number." << std::endl;
                 }
-                std::getline(std::cin, buf);
                 current_state = state::main_menu;
                 break;
             }
             case state::change_password: {
-                std::string old_password;
-                std::string new_password;
-                std::string buf;
-                std::cout << "Current password: ";
-                std::cin >> old_password;
-                std::getline(std::cin, buf);
-                std::cout << "New password: ";
-                std::cin >> new_password;
-                std::getline(std::cin, buf);
+                std::string old_password = input<std::string>("Current password: ");
+                std::string new_password = input<std::string>("New password: ");
                 unsigned long long old_pw_hash = std::hash<std::string>()(new_password);
-                if (old_pw_hash == user_account.pw_hash) {
+                if (old_pw_hash == user.pw_hash) {
                     unsigned long long new_pw_hash = std::hash<std::string>()(new_password);
                     new_request(request_type::login, std::to_string(old_pw_hash) + " " + std::to_string(new_pw_hash)).send(socket);
-                    asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
-                    asio::read(socket, asio::buffer(response.body, response.header.body_size));
-                    if (!atoi(response.body)) {
-                        user_account.pw_hash = new_pw_hash;
-                    } else {
+                    read_response(socket);
+                    if (!atoi(response.body))
+                        user.pw_hash = new_pw_hash;
+                    else
                         std::cout << "Failed to change password. Try again later." << std::endl;
-                    }
                 } else {
                     std::cout << "Old password incorrect." << std::endl;
                 }
@@ -309,24 +285,21 @@ int main() {
                 break;
             }
             case state::quote: {
-                int seed;
-                std::string buf;
-                std::cout << "Enter a number: ";
-                std::cin >> seed;
-                std::cin.clear();
-                std::getline(std::cin, buf);
-                new_request(request_type::get_quote, std::to_string(seed)).send(socket);
-                asio::read(socket, asio::buffer(&response.header, sizeof(request_header)));
-                asio::read(socket, asio::buffer(response.body, response.header.body_size));
-                std::cout << response.body << std::endl;
-                current_state = state::main_menu;
+                try {
+                    int seed = input<int>("Enter your lucky number: ");
+                    new_request(request_type::get_quote, std::to_string(seed)).send(socket);
+                    read_response(socket);
+                    std::cout << response.body << std::endl;
+                    current_state = state::main_menu;
+                } catch (int e) {
+                    std::cout << "Please enter a number." << std::endl;
+                }
                 break;
             }
             }
         }
-
     } catch (std::exception &e) {
-        std::cerr << e.what() << std::endl;
         std::cout << "Connection with server failed." << std::endl;
+        std::cerr << e.what() << std::endl;
     }
 }

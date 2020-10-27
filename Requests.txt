@@ -1,24 +1,23 @@
-Note: parameters should be tokenized in order
-
-response
-
 register_account
     Parameters:
         (string) account name
         (ull) password hash
     Return:
-        0 on success
-        1 if account name is invalid
+        (int) status
+            0 success
+            1 fail
 
 login
     Parameters:
         (string) account name
         (ull) password hash
     Return:
-        0 on success
-        1 on fail
+        (int) status
+            0 success
+            1 fail
 
 logout
+    No parameters nor return values
 
 get_balance
     Return:
@@ -44,23 +43,29 @@ withdraw
     Parameters:
         (ull) amount
     Return:
-        (ull) balance on success
-        (string) e1 - if not enough balance
+        (int) status
+            0 success
+            1 amount is invalid
+        (ull) balance
 
 transfer
     Parameters:
         (string) other account name
         (ull) amount
     Return:
-        (ull) own balance on success
-        (string) e1 - if not enough balance
-        (string) e2 - could not find account
-        (string) e3 - if other account is being used
+        (int) status
+            0 success
+            1 amount is invalid
+            2 could not find account
+            3 other account is being used
+            4 other error
+        (ull) own balance
 
 change_password
     Parameters:
         (ull) old password hash
         (ull) new password hash
     Return:
-        0 on success
-        1 on fail
+        (int) status
+            0 success
+            1 fail

@@ -1,3 +1,7 @@
+/*
+Simply a data object representing bank accounts.
+*/
+
 #ifndef ACCOUNT_H
 #define ACCOUNT_H
 
@@ -9,7 +13,7 @@ public:
     typedef std::shared_ptr<account> pointer;
 
     std::string account_name;
-    unsigned long long pw_hash;
+    unsigned long long pw_hash; // hash of the user's password
     unsigned long long balance;
 
     account() {
@@ -24,12 +28,9 @@ public:
         this->balance = balance;
     }
 
+    // In the server, we need to use smart shared pointers instead of dangerous raw pointers
     static pointer create(std::string account_name, unsigned long long pw_hash, unsigned long long balance) {
         return pointer(new account(account_name, pw_hash, balance));
-    }
-
-    static pointer create(std::string account_name, unsigned long long pw_hash) {
-        return pointer(new account(account_name, pw_hash, 0));
     }
 };
 
