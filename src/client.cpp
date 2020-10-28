@@ -74,7 +74,7 @@ T input(std::string prompt) {
 const std::string yes_no[] = {"Yes", "No"};
 const std::string login_options[] = {"Log in", "Register", "Quit"};
 const int login_options_length = 3;
-const std::string main_menu_options[] = {"Deposit", "Withdraw", "Transfer", "Change password", "Inspirational quote", "Logout"};
+const std::string main_menu_options[] = {"Deposit", "Withdraw", "Transfer", "Change password", "Inspirational quote", "Log out"};
 const int main_menu_length = 6;
 
 int main() {
@@ -102,6 +102,7 @@ int main() {
             current_state = state::connection_failed;
         }
 
+        // client can be synchronous (unlike server) since we only have one thing to do here
         while (current_state != state::exit) {
             switch (current_state) {
             case state::connection_failed: {
@@ -138,13 +139,13 @@ int main() {
                 }
                 break;
             case state::login: {
-                std::string account_name = input<std::string>("Account name: ");
+                std::string name = input<std::string>("Account name: ");
                 std::string password = input<std::string>("Password: ");
                 unsigned long long pw_hash = std::hash<std::string>()(password);
-                new_request(request_type::login, account_name + " " + std::to_string(pw_hash)).send(socket);
+                new_request(request_type::login, name + " " + std::to_string(pw_hash)).send(socket);
                 read_response(socket);
                 if (!atoi(response.body)) {
-                    user.account_name = account_name;
+                    user.name = name;
                     user.pw_hash = pw_hash;
                     new_request(request_type::get_balance, "").send(socket);
                     read_response(socket);
@@ -157,13 +158,13 @@ int main() {
                 break;
             }
             case state::registration: {
-                std::string account_name = input<std::string>("New account name: ");
+                std::string name = input<std::string>("New account name: ");
                 std::string password = input<std::string>("Password: ");
                 unsigned long long pw_hash = std::hash<std::string>()(password);
-                new_request(request_type::register_account, account_name + " " + std::to_string(pw_hash)).send(socket);
+                new_request(request_type::register_account, name + " " + std::to_string(pw_hash)).send(socket);
                 read_response(socket);
                 if (!atoi(response.body)) {
-                    user.account_name = account_name;
+                    user.name = name;
                     user.pw_hash = pw_hash;
                     new_request(request_type::get_balance, "").send(socket);
                     read_response(socket);
@@ -176,7 +177,7 @@ int main() {
                 break;
             }
             case state::main_menu: {
-                std::cout << "Hello " << user.account_name << "." << std::endl;
+                std::cout << "Hello " << user.name << "." << std::endl;
                 new_request(request_type::get_id, "").send(socket);
                 read_response(socket);
                 std::cout << "ID: " << strtoull(response.body, nullptr, 10) << std::endl;
@@ -240,12 +241,12 @@ int main() {
                 break;
             }
             case state::transfer: {
-                std::string account_name = input<std::string>("Destination account name: ");
+                std::string name = input<std::string>("Destination account name: ");
                 try {
                     double amount = input<double>("Transfer amount: $");
                     if (amount < 0) throw 1;
                     unsigned long long int_amount = (unsigned long long) (amount * 100);
-                    new_request(request_type::transfer, account_name + " " + std::to_string(int_amount)).send(socket);
+                    new_request(request_type::transfer, name + " " + std::to_string(int_amount)).send(socket);
                     read_response(socket);
                     int status;
                     response_scanner >> status >> user.balance;
@@ -269,17 +270,17 @@ int main() {
             case state::change_password: {
                 std::string old_password = input<std::string>("Current password: ");
                 std::string new_password = input<std::string>("New password: ");
-                unsigned long long old_pw_hash = std::hash<std::string>()(new_password);
+                unsigned long long old_pw_hash = std::hash<std::string>()(old_password);
                 if (old_pw_hash == user.pw_hash) {
                     unsigned long long new_pw_hash = std::hash<std::string>()(new_password);
-                    new_request(request_type::login, std::to_string(old_pw_hash) + " " + std::to_string(new_pw_hash)).send(socket);
+                    new_request(request_type::change_password, std::to_string(old_pw_hash) + " " + std::to_string(new_pw_hash)).send(socket);
                     read_response(socket);
                     if (!atoi(response.body))
                         user.pw_hash = new_pw_hash;
                     else
                         std::cout << "Failed to change password. Try again later." << std::endl;
                 } else {
-                    std::cout << "Old password incorrect." << std::endl;
+                    std::cout << "Current password incorrect." << std::endl;
                 }
                 current_state = state::main_menu;
                 break;
@@ -297,6 +298,7 @@ int main() {
                 break;
             }
             }
+            std::cout << std::endl;
         }
     } catch (std::exception &e) {
         std::cout << "Connection with server failed." << std::endl;
