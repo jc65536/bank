@@ -14,7 +14,8 @@ login
     Return:
         (int) status
             0 success
-            1 fail
+            1 invalid credentials
+            2 account in use
 
 logout
     No parameters nor return values

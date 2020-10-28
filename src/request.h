@@ -38,6 +38,9 @@ struct request {
     void send(asio::ip::tcp::socket &socket) {
         asio::write(socket, asio::buffer(this, sizeof(request_header) + header.body_size));
     }
+    void async_send(asio::ip::tcp::socket &socket) {
+        asio::async_write(socket, asio::buffer(this, sizeof(request_header) + header.body_size), [](const std::error_code &ec, size_t bytes) {});
+    }
 };
 
 // Asio also requires the data we read/write be Plain Old Data (POD) types, so we can't

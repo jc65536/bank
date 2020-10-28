@@ -75,7 +75,7 @@ private:
                 unsigned long long pw_hash;
                 req_scanner >> name >> pw_hash;
                 user = db.register_account(name, pw_hash);
-                new_request(request_type::response, user ? "0" : "1").send(socket_);
+                new_request(request_type::response, user ? "0" : "1").async_send(socket_);
                 break;
             }
             case request_type::login: {
@@ -83,29 +83,31 @@ private:
                 unsigned long long pw_hash;
                 req_scanner >> name >> pw_hash;
                 user = db.get_account(name, pw_hash);
-                new_request(request_type::response, user ? "0" : "1").send(socket_);
+                std::string error = user ? "0" : "1";
+                if (user.use_count() > 2) {
+                    error = "2";
+                    user.reset();
+                }
+                new_request(request_type::response, error).async_send(socket_);
                 break;
             }
-            case request_type::logout: {
+            case request_type::logout:
                 if (user) {
                     db.commit_updates(user);
                     user.reset();
                 }
                 break;
-            }
-            case request_type::get_balance: {
+            case request_type::get_balance:
                 if (user) {
-                    new_request(request_type::response, std::to_string(user->balance)).send(socket_);
+                    new_request(request_type::response, std::to_string(user->balance)).async_send(socket_);
                 }
                 break;
-            }
-            case request_type::get_id: {
+            case request_type::get_id:
                 if (user) {
-                    new_request(request_type::response, std::to_string((unsigned long long) &(user->name))).send(socket_);
+                    new_request(request_type::response, std::to_string((unsigned long long) &(user->name))).async_send(socket_);
                 }
                 break;
-            }
-            case request_type::get_quote: {
+            case request_type::get_quote:
                 if (user) {
                     // get quote
                     unsigned long long parameters[2];
@@ -115,64 +117,59 @@ private:
                     while (req_scanner >> seed)
                         parameters[i++] = seed;
                     std::string quote = db.get_quote(parameters);
-                    new_request(request_type::response, quote).send(socket_);
+                    new_request(request_type::response, quote).async_send(socket_);
                 }
                 break;
-            }
-            case request_type::deposit: {
+            case request_type::deposit:
                 if (user) {
                     unsigned long long amount;
                     req_scanner >> amount;
                     user->balance += amount;
-                    new_request(request_type::response, std::to_string(user->balance)).send(socket_);
+                    new_request(request_type::response, std::to_string(user->balance)).async_send(socket_);
                 }
                 break;
-            }
-            case request_type::withdraw: {
+            case request_type::withdraw:
                 if (user) {
                     unsigned long long amount;
                     req_scanner >> amount;
-                    std::string status = "0";
+                    std::string error = "0";
                     if (amount <= user->balance)
                         user->balance -= amount;
                     else
-                        status = "1";
-                    new_request(request_type::response, status + " " + std::to_string(user->balance)).send(socket_);
+                        error = "1";
+                    new_request(request_type::response, error + " " + std::to_string(user->balance)).async_send(socket_);
                 }
                 break;
-            }
-            case request_type::transfer: {
+            case request_type::transfer:
                 if (user) {
                     std::string name;
                     unsigned long long amount;
                     req_scanner >> name >> amount;
-                    std::string status = "0";
+                    std::string error = "0";
                     if (amount <= user->balance) {
                         int db_status = db.transfer(name, amount);
                         if (!db_status)
                             user->balance -= amount;
                         else
-                            status = std::to_string(db_status);
+                            error = std::to_string(db_status);
                     } else {
-                        status = "1";
+                        error = "1";
                     }
-                    new_request(request_type::response, status + " " + std::to_string(user->balance)).send(socket_);
+                    new_request(request_type::response, error + " " + std::to_string(user->balance)).async_send(socket_);
                 }
                 break;
-            }
-            case request_type::change_password: {
+            case request_type::change_password:
                 if (user) {
                     unsigned long long old_pw, new_pw;
                     req_scanner >> old_pw >> new_pw;
-                    std::string status = "0";
+                    std::string error = "0";
                     if (old_pw == user->pw_hash)
                         user->pw_hash = new_pw;
                     else
-                        status = "1";
-                    new_request(request_type::response, status).send(socket_);
+                        error = "1";
+                    new_request(request_type::response, error).async_send(socket_);
                 }
                 break;
-            }
             }
 
             read_header();
@@ -180,12 +177,12 @@ private:
     }
 
     void close() {
-        std::cout << "Client disconnected." << std::endl;
         socket_.close();
         if (user) {
             db.commit_updates(user);
             user.reset();
         }
+        shared_from_this().reset();
     }
 
     tcp::socket socket_;

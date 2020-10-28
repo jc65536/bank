@@ -144,7 +144,8 @@ int main() {
                 unsigned long long pw_hash = std::hash<std::string>()(password);
                 new_request(request_type::login, name + " " + std::to_string(pw_hash)).send(socket);
                 read_response(socket);
-                if (!atoi(response.body)) {
+                int error;
+                if (!(error = atoi(response.body))) {
                     user.name = name;
                     user.pw_hash = pw_hash;
                     new_request(request_type::get_balance, "").send(socket);
@@ -152,7 +153,10 @@ int main() {
                     response_scanner >> user.balance;
                     current_state = state::main_menu;
                 } else {
-                    std::cout << "Invalid account name or password." << std::endl;
+                    if (error == 1)
+                        std::cout << "Invalid account name or password." << std::endl;
+                    else if (error == 2)
+                        std::cout << "Your account is being used somewhere else! Please take action if you think your account has been stolen." << std::endl;
                     current_state = state::entrance;
                 }
                 break;
@@ -230,9 +234,9 @@ int main() {
                     unsigned long long int_amount = (unsigned long long) (amount * 100);
                     new_request(request_type::withdraw, std::to_string(int_amount)).send(socket);
                     read_response(socket);
-                    int status;
-                    response_scanner >> status >> user.balance;
-                    if (status != 0)
+                    int error;
+                    response_scanner >> error >> user.balance;
+                    if (error)
                         std::cout << "You can't withdraw that amount." << std::endl;
                 } catch (int e) {
                     std::cout << "Please enter a positive number." << std::endl;
@@ -248,9 +252,9 @@ int main() {
                     unsigned long long int_amount = (unsigned long long) (amount * 100);
                     new_request(request_type::transfer, name + " " + std::to_string(int_amount)).send(socket);
                     read_response(socket);
-                    int status;
-                    response_scanner >> status >> user.balance;
-                    switch (status) {
+                    int error;
+                    response_scanner >> error >> user.balance;
+                    switch (error) {
                     case 1:
                         std::cout << "You can't transfer that amount." << std::endl;
                         break;
