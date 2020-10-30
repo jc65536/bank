@@ -28,6 +28,7 @@ state current_state;
 account user;
 request response;
 std::stringstream response_scanner; // makes it easier to parse ints and ulls
+bool logged_in;
 
 // Blocks until the data is read
 void read_response(tcp::socket &socket) {

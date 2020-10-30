@@ -193,6 +193,7 @@ private:
     // pointer to the currently logged in user's account
     // we can use it as a bool to check whether the user is logged in
     account::pointer user;
+    bool logged_in;
 };
 
 #endif // TCP_CONNECTION_H
